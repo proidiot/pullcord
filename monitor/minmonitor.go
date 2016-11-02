@@ -2,8 +2,10 @@ package monitor
 
 import (
 	"fmt"
+	"github.com/fitstar/falcore"
 	// "github.com/stuphlabs/pullcord"
 	"net"
+	"net/http"
 	"strconv"
 	"time"
 )
@@ -30,28 +32,30 @@ const UnknownServiceError = errorString(
 )
 
 // MonitorredService holds the information for a single service definition.
-type MonitorredService struct {
+type MinMonitorredService struct {
 	Address string
 	Port int
 	Protocol string
 	GracePeriod time.Duration
 	lastChecked time.Time
 	up bool
+	serviceFilter *falcore.RequestFilter
 }
 
-func NewMonitorredService(
+func NewMinMonitorredService(
 	address string,
 	port int,
 	protocol string,
 	gracePeriod time.Duration,
-) (service *MonitorredService, err error) {
-	result := MonitorredService{
+) (service *MinMonitorredService, err error) {
+	result := MinMonitorredService{
 		address,
 		port,
 		protocol,
 		gracePeriod,
 		time.Time{},
 		false,
+		nil,
 	}
 
 	return &result, nil
@@ -64,7 +68,7 @@ func NewMonitorredService(
 // possible to explicitly re-probe a service regardless of the status of the
 // cache.
 type MinMonitor struct {
-	table map[string]*MonitorredService
+	table map[string]*MinMonitorredService
 }
 
 // Add adds a named service to the monitor. The named service is associated
@@ -85,7 +89,7 @@ type MinMonitor struct {
 // involving regular expressions or callback functions).
 func (monitor *MinMonitor) Add(
 	name string,
-	service *MonitorredService,
+	service *MinMonitorredService,
 ) (err error) {
 	osvc, previousEntryExists := monitor.table[name]
 	if previousEntryExists {
@@ -284,12 +288,38 @@ func (monitor *MinMonitor) SetStatusUp(name string) (err error) {
 	return nil
 }
 
+func (monitor *MinMonitor) MonitorFilter(
+	name string,
+	onUp *trigger.TriggerHandler,
+	onDown *trigger.TriggerHandler,
+) (falcore.RequestFilter, error) {
+	log().Info(
+		fmt.Sprintf(
+			"Registerring new MonitorFilter for service: %s",
+			name,
+		),
+	)
+
+	monitorService
+
+	monitor.serviceFilter = proxy.NewPassthruFilter(
+		monitor.Address,
+		monitor.Port,
+	)
+
+	filter := func(req *falcore.Request) *http.Response {
+	}
+
+	return falcore.NewRequestFilter(filter), nil
+}
+
 // NewMinMonitor constructs a new MinMonitor.
 func NewMinMonitor() *MinMonitor {
 	log().Info("initializing minimal service monitor")
 
 	var result MinMonitor
-	result.table = make(map[string]*MonitorredService)
+	result.table = make(map[string]*MinMonitorredService)
 
 	return &result
 }
+
