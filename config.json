@@ -1,0 +1,70 @@
+{
+  "resources": {
+    "sessionHandler": {
+      "type": "minsessionhandler",
+      "data": {
+        "name": "pullcord",
+        "path": "/",
+        "domain": "localhost:8080"
+      }
+    },
+    "passwordChecker": {
+      "type": "inmempwdstore",
+      "data": {
+        "admin": {
+          "salt": "RMM0WEV4s0vxZWb9Yvw0ooBU1Bs9louzqNsa+/E/SVzZg+ez72TLoXL8pFOOzk2aOFO5XLtbSECYKUK7XtF+ZQ==",
+          "iterations": 4096,
+          "hash": "3Ezu0RAlDXNhkvnVq0H4z/0dUrItfd2CyYR06u/arA6f9XAeAA0UWWB/9y/0fQOVmZi7XxyiePtR/hC33tNWXg=="
+        }
+      }
+    },
+    "landingFilter": {
+      "type": "landingfilter",
+      "data": {}
+    },
+    "loginHandler": {
+      "type": "loginhandler",
+      "data": {
+        "identifier": "pullcord",
+        "passwordChecker": {
+	  "type": "ref",
+	  "data": "passwordChecker"
+	},
+        "downstream": {
+	  "type": "ref",
+	  "data": "landingFilter"
+	}
+      }
+    },
+    "loginFilter": {
+      "type": "cookiemaskfilter",
+      "data": {
+        "handler": {
+	  "type": "ref",
+	  "data": "sessionHandler"
+	},
+        "masked": {
+	  "type": "ref",
+	  "data": "loginHandler"
+	}
+      }
+    },
+    "notFoundFilter": {
+      "type": "standardresponse",
+      "data": 404
+    },
+    "faviconFilter": {
+      "type": "exactpathrouter",
+      "data": {
+        "route": {
+          "/favicon.ico": "notFoundFilter"
+        }
+      }
+    }
+  },
+  "pipeline": [
+    "faviconFilter",
+    "loginFilter"
+  ],
+  "port": 8080
+}

@@ -1,0 +1,27 @@
+This is a demo of Pullcord as of 5897E6D4. It has several problems and is NOT
+ready to be used for anything at all, much less important things. However, it
+should give you an idea of what is to come. Feel free to change the config.json
+file.
+
+USAGE
+______________________
+
+To use the demo in its current state, you need Docker plus a running syslog
+daemon on the host.
+
+Build:
+	docker build -t pullcord_demo .
+
+Run:
+	docker run -d -v /dev/log:/dev/log --name pullcord_demo pullcord_demo
+
+Get the IP:
+	docker inspect -f '{{.NetworkSettings.IPAddress}}' pullcord_demo
+
+In a browser, replacing the IP address if needed, go to:
+	http://172.17.0.2:8080
+
+The credentials from the example config.json:
+Username: admin
+Password: SuperAwes0meP@ssword
+
