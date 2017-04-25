@@ -1,4 +1,10 @@
 language: go
 
-script: go get github.com/stretchr/testify/assert && go get github.com/fitstar/falcore && go test && go test -cover
+sudo: required
+
+install: .travis/install.sh
+
+#before_script: sudo ln -s /dev/stdout /dev/log
+
+script: .travis/tests.sh
 
