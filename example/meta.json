@@ -1,0 +1,45 @@
+{
+	"resources": {
+		"landingstarter": {
+			"type": "shelltrigger",
+			"data": {
+				"command": "/bin/bash",
+				"args": [
+					"-c",
+					"/usr/bin/pullcord &"
+				]
+			}
+		},
+		"monitor": {
+			"type": "minmonitorredservice",
+			"data": {
+				"url": "http://localhost:8080/",
+				"graceperiod": "1m",
+				"ondown": {
+					"type": "ref",
+					"data": "landingstarter"
+				}
+			}
+		},
+		"listener": {
+			"type": "basiclistener",
+			"data": {
+				"proto": "tcp",
+				"laddr": ":8081"
+			}
+		}
+	},
+	"server": {
+		"type": "httpserver",
+		"data": {
+			"listener": {
+				"type": "ref",
+				"data": "listener"
+			},
+			"handler": {
+				"type": "ref",
+				"data": "monitor"
+			}
+		}
+	}
+}
