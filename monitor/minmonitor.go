@@ -15,6 +15,7 @@ import (
 
 	"github.com/stuphlabs/pullcord/config"
 	"github.com/stuphlabs/pullcord/proxy"
+	pctime "github.com/stuphlabs/pullcord/time"
 	"github.com/stuphlabs/pullcord/trigger"
 )
 
@@ -37,7 +38,7 @@ type MinMonitorredService struct {
 	OnDown      trigger.Triggerrer
 	OnUp        trigger.Triggerrer
 	Always      trigger.Triggerrer
-	lastChecked time.Time
+	Stopwatch   pctime.Stopwatch
 	up          bool
 	passthru    http.Handler
 }
@@ -120,6 +121,7 @@ func (s *MinMonitorredService) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+/*
 // NewMinMonitorredService creates an initialized MinMonitorredService.
 func NewMinMonitorredService(
 	u *url.URL,
@@ -134,13 +136,14 @@ func NewMinMonitorredService(
 		OnDown:      onDown,
 		OnUp:        onUp,
 		Always:      always,
-		lastChecked: time.Time{},
+		Stopwatch:   new(RealStopwatch),
 		up:          false,
 		passthru:    nil,
 	}
 
 	return &result, nil
 }
+*/
 
 // MinMonitor is a minimal service monitor not intended to be used in
 // production. Named services will have an up status cached for a time, while a
@@ -240,7 +243,13 @@ func (s *MinMonitorredService) Reprobe() (up bool, err error) {
 
 	addr := fmt.Sprintf("%s:%s", hostname, port)
 	conn, err := net.Dial(socktypefam, addr)
-	s.lastChecked = time.Now()
+	if nil == s.Stopwatch {
+		s.Stopwatch = new(pctime.RealStopwatch)
+	}
+	err2 := s.Stopwatch.Reset()
+	if nil != err2 {
+		panic(err2)
+	}
 	if err != nil {
 		s.up = false
 		// TODO check what the error was
@@ -341,10 +350,16 @@ func (monitor *MinMonitor) Status(name string) (up bool, err error) {
 // assignment). However, if the status of the service is reported as being down,
 // then it necessarily means that a probe has just occurred and the service was
 // unable to be reached.
-func (s *MinMonitorredService) Status() (up bool, err error) {
-	if (!s.up) || time.Now().After(
-		s.lastChecked.Add(s.GracePeriod),
-	) {
+func (s *MinMonitorredService) Status() (bool, error) {
+	var elapsed time.Duration
+	if nil != s.Stopwatch {
+		var err error
+		elapsed, err = s.Stopwatch.Elapsed()
+		if nil != err {
+			panic(err)
+		}
+	}
+	if (!s.up) || (elapsed > s.GracePeriod) {
 		_ = log.Info(
 			fmt.Sprintf(
 				"minmonitor must reprobe as either the grace"+
@@ -372,7 +387,7 @@ func (s *MinMonitorredService) Status() (up bool, err error) {
 
 // SetStatusUp explicitly sets the status of a named service as being up. This
 // up status will be cached just as if it were the result of a normal probe.
-func (monitor *MinMonitor) SetStatusUp(name string) (err error) {
+func (monitor *MinMonitor) SetStatusUp(name string) error {
 	s, entryExists := monitor.table[name]
 	if !entryExists {
 		_ = log.Err(
@@ -399,7 +414,14 @@ func (s *MinMonitorredService) SetStatusUp() error {
 			s.URL.String(),
 		),
 	)
-	s.lastChecked = time.Now()
+	if nil == s.Stopwatch {
+		s.Stopwatch = new(pctime.RealStopwatch)
+	}
+	err := s.Stopwatch.Reset()
+	if nil != err {
+		panic(err)
+	}
+
 	s.up = true
 
 	return nil

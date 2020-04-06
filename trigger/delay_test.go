@@ -12,7 +12,10 @@ import (
 func TestDelayTriggerSingleDelay(t *testing.T) {
 	cth := &counterTriggerrer{}
 
-	dt := NewDelayTrigger(cth, time.Second)
+	dt := &DelayTrigger{
+		DelayedTrigger: cth,
+		Delay: time.Second,
+	}
 
 	err := dt.Trigger()
 	assert.NoError(t, err)
@@ -26,10 +29,10 @@ func TestDelayTriggerSingleDelay(t *testing.T) {
 func TestDelayTriggerDoubleDelay(t *testing.T) {
 	cth := &counterTriggerrer{}
 
-	dt := NewDelayTrigger(
-		cth,
-		3*time.Second,
-	)
+	dt := &DelayTrigger{
+		DelayedTrigger: cth,
+		Delay: 3*time.Second,
+	}
 
 	err := dt.Trigger()
 	assert.NoError(t, err)
@@ -53,10 +56,10 @@ func TestDelayTriggerDoubleDelay(t *testing.T) {
 func TestDelayTriggerErrorMasking(t *testing.T) {
 	cth := &counterTriggerrer{-1}
 
-	dt := NewDelayTrigger(
-		cth,
-		time.Second,
-	)
+	dt := &DelayTrigger{
+		DelayedTrigger: cth,
+		Delay: time.Second,
+	}
 
 	err := dt.Trigger()
 	assert.NoError(t, err)
@@ -70,10 +73,10 @@ func TestDelayTriggerErrorMasking(t *testing.T) {
 func TestDelayTriggerReplaceError(t *testing.T) {
 	cth := &counterTriggerrer{-1}
 
-	dt := NewDelayTrigger(
-		cth,
-		3*time.Second,
-	)
+	dt := &DelayTrigger{
+		DelayedTrigger: cth,
+		Delay: 3*time.Second,
+	}
 
 	err := dt.Trigger()
 	assert.NoError(t, err)
@@ -101,10 +104,10 @@ func TestDelayTriggerReplaceError(t *testing.T) {
 func TestDelayTriggerIntroduceError(t *testing.T) {
 	cth := &counterTriggerrer{}
 
-	dt := NewDelayTrigger(
-		cth,
-		3*time.Second,
-	)
+	dt := &DelayTrigger{
+		DelayedTrigger: cth,
+		Delay: 3*time.Second,
+	}
 
 	err := dt.Trigger()
 	assert.NoError(t, err)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/proidiot/gone/log"
 	"github.com/stuphlabs/pullcord/config"
+	pctime "github.com/stuphlabs/pullcord/time"
 )
 
 // ErrRateLimitExceeded indicates that the trigger has been called more than
@@ -23,7 +24,8 @@ type RateLimitTrigger struct {
 	GuardedTrigger   Triggerrer
 	MaxAllowed       uint
 	Period           time.Duration
-	previousTriggers []time.Time
+	NewStopwatch     func() pctime.Stopwatch
+	previousTriggers []pctime.Stopwatch
 }
 
 func init() {
@@ -74,6 +76,7 @@ func (r *RateLimitTrigger) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
+/*
 // NewRateLimitTrigger initializes a RateLimitTrigger. It may no longer be
 // strictly necessary.
 func NewRateLimitTrigger(
@@ -88,21 +91,28 @@ func NewRateLimitTrigger(
 		nil,
 	}
 }
+*/
 
 // Trigger executes its guarded trigger if and only if it has not be called more
 // than the allowed number of times within the specified rolling window of time.
 // If the rate limit is exceeded, ErrRateLimitExceeded will be returned, and
 // the guarded trigger will not be called.
 func (r *RateLimitTrigger) Trigger() error {
-	now := time.Now()
 	_ = log.Debug("rate limit trigger initiated")
 
 	if r.previousTriggers != nil {
 		_ = log.Debug("determine if rate limit has been exceeded")
-		for len(
-			r.previousTriggers,
-		) > 0 && now.After(r.previousTriggers[0].Add(r.Period)) {
-			r.previousTriggers = r.previousTriggers[1:]
+		for len(r.previousTriggers) > 0 {
+			pt := r.previousTriggers[0]
+			elapsed, err := pt.Elapsed()
+			if nil != err {
+				panic(err)
+			}
+			if elapsed > r.Period {
+				r.previousTriggers = r.previousTriggers[1:]
+			} else {
+				break
+			}
 		}
 
 		if uint(len(r.previousTriggers)) >= r.MaxAllowed {
@@ -111,10 +121,20 @@ func (r *RateLimitTrigger) Trigger() error {
 		}
 	} else {
 		_ = log.Debug("first rate limited trigger")
-		r.previousTriggers = make([]time.Time, r.MaxAllowed)
+		r.previousTriggers = make([]pctime.Stopwatch, 0)
 	}
 
-	r.previousTriggers = append(r.previousTriggers, now)
+	if nil == r.NewStopwatch {
+		r.NewStopwatch = func() pctime.Stopwatch {
+			s := new(pctime.RealStopwatch)
+			err := s.Reset()
+			if nil != err {
+				panic(err)
+			}
+			return s
+		}
+	}
+	r.previousTriggers = append(r.previousTriggers, r.NewStopwatch())
 
 	_ = log.Debug("rate limit not exceeded, cascading the trigger")
 	return r.GuardedTrigger.Trigger()

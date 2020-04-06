@@ -5,14 +5,26 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	configutil "github.com/stuphlabs/pullcord/config/util"
+	pctime "github.com/stuphlabs/pullcord/time"
+	pctimetest "github.com/stuphlabs/pullcord/time/testutil"
 	"github.com/stuphlabs/pullcord/util"
 )
 
 func TestRateLimit(t *testing.T) {
 	cth := &counterTriggerrer{}
 
-	rlt := NewRateLimitTrigger(cth, 1, time.Second)
+	fsw := new(pctimetest.FakeStopwatch)
+
+	rlt := &RateLimitTrigger{
+		GuardedTrigger: cth,
+		MaxAllowed: 1,
+		Period: time.Second,
+		NewStopwatch: func() pctime.Stopwatch {
+			return fsw
+		},
+	}
 
 	err := rlt.Trigger()
 	assert.NoError(t, err)
@@ -23,7 +35,9 @@ func TestRateLimit(t *testing.T) {
 	assert.Equal(t, ErrRateLimitExceeded, err)
 	assert.Equal(t, 1, cth.count)
 
-	time.Sleep(time.Second)
+	dur, err := time.ParseDuration("2s")
+	require.NoError(t, err)
+	fsw.SetElapsed(dur)
 	err = rlt.Trigger()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, cth.count)

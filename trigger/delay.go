@@ -8,6 +8,7 @@ import (
 
 	"github.com/proidiot/gone/log"
 	"github.com/stuphlabs/pullcord/config"
+	pctime "github.com/stuphlabs/pullcord/time"
 )
 
 // DelayTrigger is a Triggerrer that delays the execution of another
@@ -15,9 +16,10 @@ import (
 // The obvious analogy would be a screen saver, which will start after a
 // certain period has elapsed, but the timer is reset quite often.
 type DelayTrigger struct {
-	DelayedTrigger Triggerrer
-	Delay          time.Duration
-	c              chan<- interface{}
+	DelayedTrigger               Triggerrer
+	Delay                        time.Duration
+	NewRepeatedOccurrenceDelayer func() pctime.RepeatedOccurrenceDelayer
+	delayer                      pctime.RepeatedOccurrenceDelayer
 }
 
 func init() {
@@ -64,69 +66,45 @@ func (d *DelayTrigger) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// NewDelayTrigger initializes a DelayTrigger. It might not be strictly
-// necessary anymore.
-func NewDelayTrigger(
-	delayedTrigger Triggerrer,
-	delay time.Duration,
-) *DelayTrigger {
-	return &DelayTrigger{
-		delayedTrigger,
-		delay,
-		nil,
-	}
-}
-
-func delaytrigger(
-	tr Triggerrer,
-	dla time.Duration,
-	ac <-chan interface{},
-) {
-	tmr := time.NewTimer(dla)
-	for {
-		select {
-		case _, ok := <-ac:
-			if tmr != nil && !tmr.Stop() {
-				<-tmr.C
-			}
-			if !ok {
-				return
-			}
-
-			tmr.Reset(dla)
-			_ = log.Debug("delaytrigger has been reset")
-		case <-tmr.C:
-			_ = log.Debug("delaytrigger has expired")
-			if err := tr.Trigger(); err != nil {
-				_ = log.Err(
-					fmt.Sprintf(
-						"delaytrigger received an"+
-							" error: %#v",
-						err,
-					),
-				)
-			}
-			tmr.Stop()
-		}
-	}
-}
-
 // Trigger sets or resets the delay after which it will execute the child
 // trigger. The child trigger will be executed no sooner than the delay time
 // after any particular call, but subsequent calls may extend that time out
 // further (possibly indefinitely).
 func (d *DelayTrigger) Trigger() error {
 	_ = log.Debug("delaytrigger initiated")
-	if d.c == nil {
+	if d.delayer == nil {
 		_ = log.Debug("creating delay timer")
-		fc := make(chan interface{})
-		d.c = fc
+		d.delayer = d.NewRepeatedOccurrenceDelayer()
+		go func(t Triggerrer, r RepeatedOccurrence) {
+			err := r.WaitForNext()
+			for nil != err {
+				_ = log.Debug("delaytrigger has expired")
+				err = tr.Trigger()
+				if nil != err {
+					_ = log.Err(
+						fmt.Sprintf(
+							"delaytrigger received"+
+								" an error:"+
+								" %#v",
+							err,
+						),
+					)
+				}
+				err = r.WaitForNext()
+			}
 
-		go delaytrigger(d.DelayedTrigger, d.Delay, fc)
-	} else {
-		_ = log.Debug("resetting delay timer")
-		d.c <- nil
+			_ = log.Errr(
+				fmt.Sprintf(
+					"delaytrigger unable to wait for next"+
+						" occurrence: %#v",
+					err,
+				),
+			)
+		}(d.DelayedTrigger, d.delayer)
 	}
+
+	_ = log.Debug("setting delay timer")
+	d.delayer.DelayForNext(dla)
 
 	_ = log.Debug("delaytrigger completed")
 	return nil

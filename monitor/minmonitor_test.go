@@ -1,15 +1,16 @@
 package monitor
 
 import (
-	"bufio"
+	//"bufio"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
-	"strconv"
+	//"os"
+	//"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +25,10 @@ import (
 )
 
 func getFreshLandingResponder(t *testing.T) (*url.URL, *http.Server, error) {
-	l, e := net.Listen("tcp", "localhost:0")
+	lc := &net.ListenConfig{
+		KeepAlive: -1,
+	}
+	l, e := lc.Listen(context.Background(), "tcp", "localhost:0")
 	if e != nil {
 		return nil, nil, e
 	}
@@ -79,64 +83,36 @@ func recycleUpService(s *http.Server) {
 	_ = s.Close()
 }
 
-func getTCPTimeout() (time.Duration, error) {
-	defaultTCPTimeout := time.Minute
-	tcpTimeoutFile, err := os.Open(
-		"/proc/sys/net/ipv4/tcp_fin_timeout",
-	)
-	defer func() {
-		_ = tcpTimeoutFile.Close()
-	}()
-	if err != nil {
-		return defaultTCPTimeout, err
-	}
-
-	tcpTimeoutReader := bufio.NewReader(tcpTimeoutFile)
-	line, err := tcpTimeoutReader.ReadString('\n')
-	if err != nil {
-		return defaultTCPTimeout, err
-	}
-
-	line = line[:len(line)-1]
-	tcpTimeout, err := strconv.Atoi(line)
-	if err != nil {
-		return defaultTCPTimeout, err
-	}
-
-	sleepSeconds := tcpTimeout + 1
-	return time.ParseDuration(
-		fmt.Sprintf("%ds", sleepSeconds),
-	)
-}
-
 var _downService *url.URL
 
 func getDownService(t *testing.T) (*url.URL, error) {
 	if _downService == nil {
+		/*
 		u, e := url.Parse("//127.0.0.1:2")
 		if e != nil {
 			return nil, e
 		}
 		_downService = u
-		/*
-			u, s, e := getUpService(t)
-			if e != nil {
-				return nil, e
-			}
-			s.Close()
-
-			d, e := getTCPTimeout()
-			if e != nil {
-				return nil, e
-			}
-			t.Logf(
-				"Sleeping for %s so that the test socket can close",
-				d.String(),
-			)
-			time.Sleep(d)
-
-			_downService = u
 		*/
+		u, s, e := getUpService(t)
+		if e != nil {
+			return nil, e
+		}
+		s.Close()
+
+		/*
+		d, e := getTCPTimeout()
+		if e != nil {
+			return nil, e
+		}
+		t.Logf(
+			"Sleeping for %s so that the test socket can close",
+			d.String(),
+		)
+		time.Sleep(d)
+		*/
+
+		_downService = u
 	}
 
 	return _downService, nil
@@ -152,13 +128,10 @@ func TestMinMonitorUpService(t *testing.T) {
 	require.NoError(t, err)
 	defer recycleUpService(s)
 
-	service, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	service := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -181,13 +154,10 @@ func TestMinMonitorDownService(t *testing.T) {
 	u, err := getDownService(t)
 	assert.NoError(t, err)
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -212,13 +182,10 @@ func TestMinMonitorInvalidService(t *testing.T) {
 
 	gracePeriod := time.Duration(0)
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -243,13 +210,10 @@ func TestMinMonitorUpReprobe(t *testing.T) {
 
 	gracePeriod := time.Duration(0)
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -273,13 +237,10 @@ func TestMinMonitorDownReprobe(t *testing.T) {
 
 	gracePeriod := time.Duration(0)
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -306,13 +267,10 @@ func TestMinMonitorSetStatusUp(t *testing.T) {
 	gracePeriod, err := time.ParseDuration("30s")
 	assert.NoError(t, err)
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -346,13 +304,10 @@ func TestMinMonitorFalsePositive(t *testing.T) {
 	gracePeriod, err := time.ParseDuration("30s")
 	assert.NoError(t, err)
 
-	service, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	service := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -383,13 +338,10 @@ func TestMinMonitorTrueNegative(t *testing.T) {
 
 	gracePeriod := time.Duration(0)
 
-	service, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	service := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -405,6 +357,7 @@ func TestMinMonitorTrueNegative(t *testing.T) {
 	err = s.Close()
 	assert.NoError(t, err)
 
+	/*
 	// The socket is kept open for an amount of time after being prompted
 	// to close in case any more TCP packets show up. Unfortunately we'll
 	// just have to wait.
@@ -415,6 +368,7 @@ func TestMinMonitorTrueNegative(t *testing.T) {
 		sleepDuration.String(),
 	)
 	time.Sleep(sleepDuration)
+	*/
 
 	up, err = mon.Status(testServiceName)
 	assert.NoError(t, err)
@@ -474,13 +428,10 @@ func TestMinMonitorAddExistant(t *testing.T) {
 
 	gracePeriod := time.Duration(0)
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -492,13 +443,10 @@ func TestMinMonitorAddExistant(t *testing.T) {
 	u2, err := url.Parse(fmt.Sprintf("%s0", u.String()))
 	assert.NoError(t, err)
 
-	svc2, err := NewMinMonitorredService(
-		u2,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	svc2 := &MinMonitorredService{
+		URL: u2,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	err = mon.Add(
 		testServiceName,
@@ -520,13 +468,10 @@ func TestMonitorFilterUp(t *testing.T) {
 
 	gracePeriod := time.Duration(0)
 
-	service, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	service := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -563,13 +508,10 @@ func TestMonitorFilterDown(t *testing.T) {
 
 	gracePeriod := time.Duration(0)
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		nil,
-		nil,
-		nil,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -630,13 +572,13 @@ func TestMonitorFilterUpTriggers(t *testing.T) {
 	onUp := &counterTriggerrer{}
 	always := &counterTriggerrer{}
 
-	service, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		onDown,
-		onUp,
-		always,
-	)
+	service := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+		OnDown: onDown,
+		OnUp: onUp,
+		Always: always,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -682,13 +624,13 @@ func TestMonitorFilterDownTriggers(t *testing.T) {
 	onUp := &counterTriggerrer{}
 	always := &counterTriggerrer{}
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		onDown,
-		onUp,
-		always,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+		OnDown: onDown,
+		OnUp: onUp,
+		Always: always,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -735,13 +677,13 @@ func TestMonitorFilterUpOnUpTriggerError(t *testing.T) {
 	onUp := &counterTriggerrer{-1}
 	always := &counterTriggerrer{}
 
-	service, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		onDown,
-		onUp,
-		always,
-	)
+	service := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+		OnDown: onDown,
+		OnUp: onUp,
+		Always: always,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -785,13 +727,13 @@ func TestMonitorFilterDownOnDownTriggerError(t *testing.T) {
 	onUp := &counterTriggerrer{}
 	always := &counterTriggerrer{}
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		onDown,
-		onUp,
-		always,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+		OnDown: onDown,
+		OnUp: onUp,
+		Always: always,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
@@ -835,13 +777,13 @@ func TestMonitorFilterDownAlwaysTriggerError(t *testing.T) {
 	onUp := &counterTriggerrer{}
 	always := &counterTriggerrer{-1}
 
-	svc, err := NewMinMonitorredService(
-		u,
-		gracePeriod,
-		onDown,
-		onUp,
-		always,
-	)
+	svc := &MinMonitorredService{
+		URL: u,
+		GracePeriod: gracePeriod,
+		OnDown: onDown,
+		OnUp: onUp,
+		Always: always,
+	}
 	assert.NoError(t, err)
 	mon := MinMonitor{}
 	err = mon.Add(
